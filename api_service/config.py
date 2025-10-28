@@ -1,0 +1,35 @@
+"""
+配置文件 - 管理API服务的配置信息
+"""
+import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
+
+# Gemini API 配置
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyAnLAvq3I9Md70gnFWYo7jJRPGkJNK4xho')
+GEMINI_PROXY_URL = os.getenv('GEMINI_PROXY_URL', 'https://jump-sea.heiji.online')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'models/gemini-2.5-pro')
+GEMINI_TIMEOUT = int(os.getenv('GEMINI_TIMEOUT', '600000'))
+
+# 腾讯云 COS 配置
+COS_SECRET_ID = os.getenv('COS_SECRET_ID') or os.getenv('SECRET_ID')
+COS_SECRET_KEY = os.getenv('COS_SECRET_KEY') or os.getenv('SECRET_KEY')
+COS_REGION = os.getenv('COS_REGION') or os.getenv('REGION', 'ap-guangzhou')
+COS_BUCKET = os.getenv('COS_BUCKET') or os.getenv('BUCKET')
+COS_TOKEN = os.getenv('TOKEN')
+
+# 缓存目录配置
+CACHE_ROOT_DIR = os.getenv('CACHE_ROOT_DIR', './cache')
+
+# 任务存储配置
+TASK_STORAGE_FILE = os.getenv('TASK_STORAGE_FILE', './tasks.json')
+
+# Flask 配置
+FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
+FLASK_PORT = int(os.getenv('FLASK_PORT', '15000'))
+FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+
+# 麻将分析系统指令
+MAHJONG_ANALYSIS_SYSTEM_INSTRUCTION = '你是一位麻将高手和麻将游戏分析专家，擅长游戏记分和分析。'
