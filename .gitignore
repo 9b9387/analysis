@@ -46,6 +46,7 @@ Thumbs.db
 cos_file_list.json
 file_list.json
 downloads/
+tasks.json
 
 # 日志文件
 *.log
