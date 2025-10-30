@@ -76,6 +76,18 @@ class TaskProcessor:
                 
                 self.logger.info(f"下载完成，共 {len(png_files)} 个文件")
             
+            # 新增：限制最大分析图片数量为30，超过则直接标记任务失败并返回
+            if png_files and len(png_files) > 30:
+                self.logger.warning(f"任务 {task_id} 图片数量超限: {len(png_files)} > 30")
+                self.task_manager.update_task(
+                    task_id,
+                    status=TaskStatus.FAILED,
+                    progress=0,
+                    message=f"图片数量超过限制: {len(png_files)} > 30",
+                    error="图片数量超过限制(30)"
+                )
+                return
+            
             # 步骤2: 分析每个PNG文件
             self.logger.info(f"开始分析PNG文件")
             self.task_manager.update_task(

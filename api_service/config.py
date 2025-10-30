@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Gemini API 配置
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyAnLAvq3I9Md70gnFWYo7jJRPGkJNK4xho')
-GEMINI_PROXY_URL = os.getenv('GEMINI_PROXY_URL', 'https://jump-sea.heiji.online')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+GEMINI_PROXY_URL = os.getenv('GEMINI_PROXY_URL', '')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'models/gemini-2.5-pro')
 GEMINI_TIMEOUT = int(os.getenv('GEMINI_TIMEOUT', '600000'))
 

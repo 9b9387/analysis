@@ -10,6 +10,8 @@ from typing import List, Optional
 from google import genai
 from google.genai import types
 
+from api_service.google_client_files import Files
+
 from . import config
 
 
@@ -25,7 +27,9 @@ class GeminiAnalyzer:
         self.client = genai.Client(
             api_key=config.GEMINI_API_KEY,
             http_options=http_options
+
         )
+        self.client._files = Files(self.client._api_client)
         self.model = config.GEMINI_MODEL
         self.logger = logging.getLogger(__name__)
     
