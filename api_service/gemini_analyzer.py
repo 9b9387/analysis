@@ -9,6 +9,7 @@ import sys
 from typing import List, Optional
 from google import genai
 from google.genai import types
+from google.genai.types import HttpOptions
 
 from api_service.google_client_files import Files
 
@@ -27,11 +28,15 @@ class GeminiAnalyzer:
         self.client = genai.Client(
             api_key=config.GEMINI_API_KEY,
             http_options=http_options
-
         )
         self.client._files = Files(self.client._api_client)
+
         self.model = config.GEMINI_MODEL
         self.logger = logging.getLogger(__name__)
+
+        self.logger.info(f"GeminiAnalyzer initialized with model: {self.model}")
+        self.logger.info(f"Using Gemini Proxy URL: {config.GEMINI_PROXY_URL}")
+        
     
     def upload_file(self, file_path: str) -> str:
         """
@@ -127,12 +132,8 @@ class GeminiAnalyzer:
                 json_filename = os.path.splitext(os.path.basename(image_path))[0] + '.json'
                 json_path = os.path.join(output_dir, json_filename)
                 
-                if os.path.exists(json_path):
-                    self.logger.info(f"JSON文件已存在，跳过: {json_path}")
-                    json_files.append(json_path)
-                    continue
-                
                 # 分析图片
+                self.logger.info(f"开始分析图片 {i}/{total}: {image_path}")
                 result = self.analyze_image(image_path, prompt)
                 
                 # 保存JSON结果
