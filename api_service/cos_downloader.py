@@ -1,9 +1,11 @@
 """
 COS下载器 - 从腾讯云COS下载PNG文件
 """
+import json
+import mimetypes
 import os
 import logging
-from typing import List
+from typing import Any, List, Optional
 from qcloud_cos import CosConfig, CosS3Client
 from qcloud_cos.cos_exception import CosServiceError, CosClientError
 
@@ -51,9 +53,85 @@ class COSDownloader:
         # 设置日志
         self.logger = logging.getLogger(__name__)
     
+    def upload_file(self, local_path: str, key: str, *, content_type: Optional[str] = None) -> bool:
+        """上传本地文件到COS"""
+        if self.is_public:
+            raise PermissionError("当前为匿名访问模式，无法上传文件")
+
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(f"文件不存在: {local_path}")
+
+        norm_key = key.lstrip('/')
+        guessed_type = content_type or mimetypes.guess_type(local_path)[0] or 'application/octet-stream'
+
+        try:
+            self.logger.info(f"上传文件到COS: {local_path} -> {norm_key}")
+            with open(local_path, 'rb') as fp:
+                self.client.put_object(
+                    Bucket=self.bucket,
+                    Key=norm_key,
+                    Body=fp.read(),
+                    ContentType=guessed_type
+                )
+            return True
+        except CosServiceError as e:
+            self.logger.error(f"上传失败: {e.get_error_code()} - {e.get_error_msg()}")
+            return False
+        except Exception as e:
+            self.logger.error(f"上传时发生错误: {e}")
+            return False
+
+    def upload_text(self, content: str, key: str, *, encoding: str = 'utf-8', content_type: str = 'text/plain; charset=utf-8') -> bool:
+        """将文本内容上传到COS"""
+        if self.is_public:
+            raise PermissionError("当前为匿名访问模式，无法上传文本")
+
+        norm_key = key.lstrip('/')
+
+        try:
+            self.logger.info(f"上传文本到COS: {norm_key}")
+            self.client.put_object(
+                Bucket=self.bucket,
+                Key=norm_key,
+                Body=content.encode(encoding),
+                ContentType=content_type
+            )
+            return True
+        except CosServiceError as e:
+            self.logger.error(f"文本上传失败: {e.get_error_code()} - {e.get_error_msg()}")
+            return False
+        except Exception as e:
+            self.logger.error(f"文本上传时发生错误: {e}")
+            return False
+
+    def upload_json(self, data: Any, key: str, *, ensure_ascii: bool = False,
+                    indent: int = 2, encoding: str = 'utf-8') -> bool:
+        """将JSON数据上传到COS"""
+        if self.is_public:
+            raise PermissionError("当前为匿名访问模式，无法上传JSON数据")
+
+        norm_key = key.lstrip('/')
+
+        try:
+            payload = json.dumps(data, ensure_ascii=ensure_ascii, indent=indent)
+            self.logger.info(f"上传JSON到COS: {norm_key}")
+            self.client.put_object(
+                Bucket=self.bucket,
+                Key=norm_key,
+                Body=payload.encode(encoding),
+                ContentType=f'application/json; charset={encoding}'
+            )
+            return True
+        except CosServiceError as e:
+            self.logger.error(f"JSON上传失败: {e.get_error_code()} - {e.get_error_msg()}")
+            return False
+        except Exception as e:
+            self.logger.error(f"JSON上传时发生错误: {e}")
+            return False
+
     def list_png_files(self, prefix: str) -> List[str]:
         """
-        列出指定前缀下的所有PNG文件
+        列出指定前缀下的所有PNG文件（兼容旧接口）
         
         Args:
             prefix: COS路径前缀
@@ -61,10 +139,28 @@ class COSDownloader:
         Returns:
             PNG文件key列表
         """
-        try:
-            self.logger.info(f"正在获取PNG文件列表 - 前缀: '{prefix}'")
+        return self.list_target_files(prefix, extensions=['.png'])
+    
+    def list_target_files(self, prefix: str, extensions: List[str] = None) -> List[str]:
+        """
+        列出指定前缀下的目标文件
+        
+        Args:
+            prefix: COS路径前缀
+            extensions: 文件扩展名列表，例如 ['.png', '.json']，None表示所有文件
             
-            png_files = []
+        Returns:
+            目标文件key列表
+        """
+        if extensions is None:
+            extensions = ['.png', '.json']
+        
+        extensions = [ext.lower() for ext in extensions]
+        
+        try:
+            self.logger.info(f"正在获取文件列表 - 前缀: '{prefix}', 扩展名: {extensions}")
+            
+            target_files = []
             marker = ''
             
             # 确保prefix以/结尾
@@ -83,9 +179,9 @@ class COSDownloader:
                 if 'Contents' in response:
                     for obj in response['Contents']:
                         key = obj['Key']
-                        # 只保留PNG文件
-                        if key.lower().endswith('.png'):
-                            png_files.append(key)
+                        # 检查文件扩展名
+                        if any(key.lower().endswith(ext) for ext in extensions):
+                            target_files.append(key)
                 
                 # 检查是否还有更多对象
                 if response.get('IsTruncated') == 'true':
@@ -95,8 +191,8 @@ class COSDownloader:
                 else:
                     break
             
-            self.logger.info(f"找到 {len(png_files)} 个PNG文件")
-            return png_files
+            self.logger.info(f"找到 {len(target_files)} 个目标文件")
+            return target_files
             
         except CosServiceError as e:
             self.logger.error(f"COS服务错误: {e.get_error_code()} - {e.get_error_msg()}")
@@ -147,7 +243,7 @@ class COSDownloader:
     def download_png_files(self, prefix: str, local_dir: str, 
                           progress_callback=None) -> List[str]:
         """
-        下载指定前缀下的所有PNG文件
+        下载指定前缀下的所有PNG文件（兼容旧接口）
         
         Args:
             prefix: COS路径前缀
@@ -157,20 +253,46 @@ class COSDownloader:
         Returns:
             下载成功的本地文件路径列表
         """
-        # 获取PNG文件列表
-        png_keys = self.list_png_files(prefix)
+        return self.download_files(prefix, local_dir, extensions=['.png'], 
+                                   progress_callback=progress_callback)
+    
+    def download_files(self, prefix: str, local_dir: str, 
+                      extensions: List[str] = None,
+                      progress_callback=None) -> dict:
+        """
+        下载指定前缀下的目标文件
         
-        if not png_keys:
-            self.logger.warning(f"在 '{prefix}' 下未找到PNG文件")
-            return []
+        Args:
+            prefix: COS路径前缀
+            local_dir: 本地保存目录
+            extensions: 文件扩展名列表，例如 ['.png', '.json']，None表示下载PNG和JSON
+            progress_callback: 进度回调函数 callback(current, total, message)
+            
+        Returns:
+            包含不同类型文件路径列表的字典，例如：
+            {
+                'png': ['/path/to/file1.png', ...],
+                'json': ['/path/to/file1.json', ...],
+                'all': ['/path/to/file1.png', '/path/to/file1.json', ...]
+            }
+        """
+        if extensions is None:
+            extensions = ['.png', '.json']
+        
+        # 获取目标文件列表
+        target_keys = self.list_target_files(prefix, extensions)
+        
+        if not target_keys:
+            self.logger.warning(f"在 '{prefix}' 下未找到目标文件")
+            return {'png': [], 'json': [], 'all': []}
         
         # 创建本地目录
         os.makedirs(local_dir, exist_ok=True)
         
-        downloaded_files = []
-        total = len(png_keys)
+        downloaded_files = {'png': [], 'json': [], 'all': []}
+        total = len(target_keys)
         
-        for i, key in enumerate(png_keys, 1):
+        for i, key in enumerate(target_keys, 1):
             # 构建本地文件路径，保持COS的目录结构
             relative_path = key[len(prefix):].lstrip('/')
             local_path = os.path.join(local_dir, relative_path)
@@ -178,7 +300,14 @@ class COSDownloader:
             # 检查文件是否已存在
             if os.path.exists(local_path):
                 self.logger.info(f"文件已存在，跳过: {local_path}")
-                downloaded_files.append(local_path)
+                downloaded_files['all'].append(local_path)
+                
+                # 根据扩展名分类
+                if local_path.lower().endswith('.png'):
+                    downloaded_files['png'].append(local_path)
+                elif local_path.lower().endswith('.json'):
+                    downloaded_files['json'].append(local_path)
+                
                 if progress_callback:
                     progress_callback(i, total, f"跳过已存在的文件: {os.path.basename(key)}")
                 continue
@@ -188,11 +317,18 @@ class COSDownloader:
                 progress_callback(i, total, f"下载中: {os.path.basename(key)}")
             
             if self.download_file(key, local_path):
-                downloaded_files.append(local_path)
+                downloaded_files['all'].append(local_path)
+                
+                # 根据扩展名分类
+                if local_path.lower().endswith('.png'):
+                    downloaded_files['png'].append(local_path)
+                elif local_path.lower().endswith('.json'):
+                    downloaded_files['json'].append(local_path)
             else:
                 self.logger.error(f"下载失败: {key}")
         
-        self.logger.info(f"下载完成，成功 {len(downloaded_files)}/{total} 个文件")
+        self.logger.info(f"下载完成，成功 {len(downloaded_files['all'])}/{total} 个文件 "
+                        f"(PNG: {len(downloaded_files['png'])}, JSON: {len(downloaded_files['json'])})")
         return downloaded_files
     
     def list_directory(self, prefix: str) -> dict:

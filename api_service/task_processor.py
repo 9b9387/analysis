@@ -34,7 +34,7 @@ class TaskProcessor:
             prompt = task.prompt
             cache_dir = self.task_manager.get_cache_dir(cos_path)
             
-            # 步骤1: 检查缓存或下载PNG文件
+            # 步骤1: 检查缓存或下载PNG和JSON文件
             if self.task_manager.check_cache_exists(cos_path):
                 self.logger.info(f"使用缓存: {cache_dir}")
                 self.task_manager.update_task(
@@ -46,15 +46,15 @@ class TaskProcessor:
                 )
                 png_files = self.task_manager.get_cached_png_files(cos_path)
             else:
-                self.logger.info(f"开始下载PNG文件: {cos_path}")
+                self.logger.info(f"开始下载文件: {cos_path}")
                 self.task_manager.update_task(
                     task_id,
                     status=TaskStatus.DOWNLOADING,
                     progress=10,
-                    message="开始下载PNG文件"
+                    message="开始下载PNG和JSON文件"
                 )
                 
-                # 下载文件
+                # 下载PNG和JSON文件
                 downloader = COSDownloader()
                 
                 def download_progress(current, total, msg):
@@ -65,16 +65,20 @@ class TaskProcessor:
                         message=f"下载进度: {current}/{total} - {msg}"
                     )
                 
-                png_files = downloader.download_png_files(
+                downloaded_files = downloader.download_files(
                     cos_path,
                     cache_dir,
+                    extensions=['.png', '.json'],
                     progress_callback=download_progress
                 )
+                
+                png_files = downloaded_files.get('png', [])
                 
                 if not png_files:
                     raise ValueError(f"未找到PNG文件: {cos_path}")
                 
-                self.logger.info(f"下载完成，共 {len(png_files)} 个文件")
+                json_count = len(downloaded_files.get('json', []))
+                self.logger.info(f"下载完成，共 {len(png_files)} 个PNG文件，{json_count} 个JSON文件")
             
             # 新增：限制最大分析图片数量为30，超过则直接标记任务失败并返回
             if png_files and len(png_files) > 30:
@@ -98,6 +102,8 @@ class TaskProcessor:
             )
             
             analyzer = GeminiAnalyzer()
+            normalized_cos_path = cos_path.strip('/') if cos_path else ''
+            cos_result_prefix = f"{normalized_cos_path}/analysis" if normalized_cos_path else "analysis"
             
             def analyze_progress(current, total, msg):
                 progress = 40 + int(40 * current / total)
@@ -107,13 +113,15 @@ class TaskProcessor:
                     message=f"分析进度: {current}/{total} - {msg}"
                 )
             
-            from gemini.anlysis_rule import prompt_extract_score
+            from gemini.anlysis_rule import prompt_score_rule
                 
             json_files = analyzer.batch_analyze_images(
                 png_files,
-                prompt_extract_score,
+                prompt_score_rule,
                 cache_dir,
-                progress_callback=analyze_progress
+                progress_callback=analyze_progress,
+                cos_result_prefix=cos_result_prefix,
+                force_reanalyze=task.force_reanalyze
             )
             
             if not json_files:
@@ -137,7 +145,8 @@ class TaskProcessor:
             result_text = analyzer.merge_and_analyze_json(
                 json_files,
                 prompt,
-                result_file
+                result_file,
+                cos_result_prefix=cos_result_prefix
             )
             
             self.logger.info(f"合并分析完成")

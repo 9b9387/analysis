@@ -23,10 +23,11 @@ class TaskStatus(Enum):
 class Task:
     """任务对象"""
     
-    def __init__(self, task_id: str, cos_path: str, prompt: str):
+    def __init__(self, task_id: str, cos_path: str, prompt: str, force_reanalyze: bool = False):
         self.task_id = task_id
         self.cos_path = cos_path
         self.prompt = prompt
+        self.force_reanalyze = force_reanalyze
         self.status = TaskStatus.PENDING
         self.created_at = datetime.now().isoformat()
         self.updated_at = datetime.now().isoformat()
@@ -42,6 +43,7 @@ class Task:
             'task_id': self.task_id,
             'cos_path': self.cos_path,
             'prompt': self.prompt,
+            'force_reanalyze': self.force_reanalyze,
             'status': self.status.value,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
@@ -55,7 +57,8 @@ class Task:
     @classmethod
     def from_dict(cls, data: dict) -> 'Task':
         """从字典创建任务对象"""
-        task = cls(data['task_id'], data['cos_path'], data['prompt'])
+        task = cls(data['task_id'], data['cos_path'], data['prompt'], 
+                  data.get('force_reanalyze', False))
         task.status = TaskStatus(data['status'])
         task.created_at = data['created_at']
         task.updated_at = data['updated_at']
@@ -82,10 +85,10 @@ class TaskManager:
         # 加载已有任务
         self._load_tasks()
     
-    def create_task(self, cos_path: str, prompt: str) -> str:
+    def create_task(self, cos_path: str, prompt: str, force_reanalyze: bool = False) -> str:
         """创建新任务"""
         task_id = str(uuid.uuid4())
-        task = Task(task_id, cos_path, prompt)
+        task = Task(task_id, cos_path, prompt, force_reanalyze)
         
         with self.lock:
             self.tasks[task_id] = task

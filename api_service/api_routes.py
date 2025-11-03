@@ -42,7 +42,8 @@ def create_analysis():
     请求体:
     {
         "cos_path": "egg/uuid/2025-10-15",
-        "prompt": "分析提示词"
+        "prompt": "分析提示词",
+        "force_reanalyze": false  // 可选，是否强制重新分析已有JSON的图片，默认false
     }
     
     返回:
@@ -61,6 +62,7 @@ def create_analysis():
         
         cos_path = data.get('cos_path')
         prompt = data.get('prompt')
+        force_reanalyze = data.get('force_reanalyze', False)
         
         # 验证参数
         if not cos_path:
@@ -70,7 +72,7 @@ def create_analysis():
             return jsonify({'error': 'prompt参数不能为空'}), 400
         
         # 创建任务
-        task_id = task_manager.create_task(cos_path, prompt)
+        task_id = task_manager.create_task(cos_path, prompt, force_reanalyze)
         
         # 启动任务处理
         task_processor.start_task(task_id)
@@ -78,7 +80,8 @@ def create_analysis():
         return jsonify({
             'task_id': task_id,
             'status': 'pending',
-            'message': '任务已创建'
+            'message': '任务已创建',
+            'force_reanalyze': force_reanalyze
         }), 201
     
     except Exception as e:
@@ -206,7 +209,17 @@ def get_analysis_result(task_id: str):
         # 读取文件内容
         with open(task.result_file, 'r', encoding='utf-8') as f:
             content = f.read()
+        # 获取文件名并添加_merged后缀
+        filename = os.path.basename(task.result_file)
+        name, ext = os.path.splitext(filename)
+        merged_filename = f"{name}_merged{ext}"
+        merged_file_path = os.path.join(os.path.dirname(task.result_file), merged_filename)
         
+        # 读取merged文件内容作为analysis_data
+        analysis_data = ""
+        if os.path.exists(merged_file_path):
+            with open(merged_file_path, 'r', encoding='utf-8') as f:
+                analysis_data = f.read()
         # 获取文件大小
         file_size = os.path.getsize(task.result_file)
         
@@ -215,6 +228,7 @@ def get_analysis_result(task_id: str):
             'status': task.status.value,
             'result_file': task.result_file,
             'content': content,
+            'analysis_data': analysis_data,
             'size': file_size,
             'created_at': task.created_at,
             'updated_at': task.updated_at

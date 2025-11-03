@@ -13,6 +13,13 @@ GEMINI_PROXY_URL = os.getenv('GEMINI_PROXY_URL', '')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'models/gemini-2.5-pro')
 GEMINI_TIMEOUT = int(os.getenv('GEMINI_TIMEOUT', '600000'))
 
+# 豆包模型配置
+DOUBAO_API_KEY = os.getenv('DOUBAO_API_KEY', '')
+DOUBAO_MODEL = os.getenv('DOUBAO_MODEL', 'doubao-seed-1-6-251015')
+DOUBAO_BASE_URL = os.getenv('DOUBAO_BASE_URL', 'https://ark.cn-beijing.volces.com/api/v3')
+DOUBAO_REASONING = os.getenv('DOUBAO_REASONING', 'medium')
+DOUBAO_TEMPERATURE = float(os.getenv('DOUBAO_TEMPERATURE', '0'))
+
 # 腾讯云 COS 配置
 COS_SECRET_ID = os.getenv('COS_SECRET_ID') or os.getenv('SECRET_ID')
 COS_SECRET_KEY = os.getenv('COS_SECRET_KEY') or os.getenv('SECRET_KEY')
