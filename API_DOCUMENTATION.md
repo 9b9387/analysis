@@ -211,12 +211,12 @@ GET /analysis/{task_id}/result
 
 ### 5. 列出所有任务
 
-获取所有任务的列表，支持过滤和分页。
+获取所有任务的列表，支持过滤、名称搜索和分页。
 
 **请求**
 
 ```http
-GET /tasks?status={status}&page={page}&page_size={page_size}
+GET /tasks?status={status}&name={name}&page={page}&page_size={page_size}
 ```
 
 **查询参数**
@@ -224,6 +224,7 @@ GET /tasks?status={status}&page={page}&page_size={page_size}
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | status | string | 否 | - | 过滤任务状态（pending/downloading/analyzing/merging/completed/failed） |
+| name | string | 否 | - | 任务名称模糊搜索（不区分大小写） |
 | page | integer | 否 | 1 | 页码，从1开始 |
 | page_size | integer | 否 | 20 | 每页数量，最大100 |
 | limit | integer | 否 | - | 限制返回数量（已废弃，建议使用page和page_size） |
@@ -237,6 +238,7 @@ GET /tasks?status={status}&page={page}&page_size={page_size}
       "task_id": "85b9949b-f8c4-4855-97fe-8a2bf6e9b644",
       "cos_path": "egg/057c3d16-8767-4094-a8f3-1436a1bf7a88/2025-10-24",
       "prompt": "请分析这些麻将游戏截图",
+      "name": "2025年10月测试局",
       "force_reanalyze": false,
       "status": "completed",
       "created_at": "2025-10-27T10:00:00.123456",
@@ -281,6 +283,12 @@ GET /tasks?page=2&page_size=10
 
 # 过滤已完成的任务，第1页
 GET /tasks?status=completed&page=1&page_size=20
+
+# 模糊搜索名称包含"测试"的任务
+GET /tasks?name=测试
+
+# 搜索名称包含"10月"且状态为completed的任务
+GET /tasks?name=10月&status=completed
 
 # 使用旧的limit参数（向后兼容）
 GET /tasks?limit=50
@@ -336,83 +344,4 @@ GET /cos/list?path={cos_path}
 - `500 Internal Server Error`: 服务器内部错误
 
 ---
-
-### 7. 根据名称搜索任务
-
-根据任务名称搜索任务列表。
-
-**请求**
-
-```http
-GET /search/{name}?status={status}&limit={limit}
-```
-
-**路径参数**
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| name | string | 任务名称 |
-
-**查询参数**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| status | string | 否 | 过滤任务状态（pending/downloading/analyzing/merging/completed/failed） |
-| limit | integer | 否 | 限制返回数量 |
-
-**响应**
-
-```json
-{
-  "name": "2025年10月测试局",
-  "tasks": [
-    {
-      "task_id": "85b9949b-f8c4-4855-97fe-8a2bf6e9b644",
-      "cos_path": "egg/057c3d16-8767-4094-a8f3-1436a1bf7a88/2025-10-24",
-      "prompt": "请分析这些麻将游戏截图",
-      "name": "2025年10月测试局",
-      "force_reanalyze": false,
-      "status": "completed",
-      "created_at": "2025-10-27T10:00:00.123456",
-      "updated_at": "2025-10-27T10:05:00.123456",
-      "progress": 100,
-      "message": "分析完成",
-      "error": null,
-      "result_file": "/path/to/result.txt",
-      "cache_used": false
-    }
-  ],
-  "total": 5
-}
-```
-
-**响应字段说明**
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| name | string | 搜索的任务名称 |
-| tasks | array | 匹配的任务列表 |
-| total | integer | 匹配的任务总数 |
-
-**状态码**
-- `200 OK`: 查询成功
-- `400 Bad Request`: 参数错误（如无效的status值）
-- `500 Internal Server Error`: 服务器内部错误
-
-**使用示例**
-
-```http
-# 搜索名称为"2025年10月测试局"的所有任务
-GET /search/2025年10月测试局
-
-# 搜索名称为"测试"且状态为completed的任务
-GET /search/测试?status=completed
-
-# 搜索名称为"测试"的任务，最多返回10条
-GET /search/测试?limit=10
-
-# 搜索名称为"测试"且状态为completed的任务，最多返回5条
-GET /search/测试?status=completed&limit=5
-```
-
----
+````

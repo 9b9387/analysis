@@ -131,6 +131,7 @@ def list_tasks():
     
     查询参数:
         status: 过滤任务状态 (pending, downloading, analyzing, merging, completed, failed)
+        name: 任务名称模糊搜索（可选）
         page: 页码，从1开始 (默认: 1)
         page_size: 每页数量 (默认: 20)
         limit: 限制返回数量 (已废弃，建议使用page和page_size)
@@ -154,6 +155,7 @@ def list_tasks():
     try:
         # 获取查询参数
         status_filter = request.args.get('status')
+        name_filter = request.args.get('name')
         page = request.args.get('page', default=1, type=int)
         page_size = request.args.get('page_size', default=20, type=int)
         limit = request.args.get('limit', type=int)  # 向后兼容
@@ -168,6 +170,10 @@ def list_tasks():
         
         # 获取所有任务
         tasks = list(task_manager.tasks.values())
+        
+        # 过滤名称（模糊搜索）
+        if name_filter:
+            tasks = [t for t in tasks if name_filter.lower() in t.name.lower()]
         
         # 过滤状态
         if status_filter:
@@ -210,70 +216,6 @@ def list_tasks():
     
     except Exception as e:
         logging.error(f"列出任务失败: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/search/<name>', methods=['GET'])
-def search_tasks_by_name(name: str):
-    """
-    根据任务名称搜索任务
-    
-    参数:
-        name: 任务名称（路径参数）
-    
-    查询参数:
-        status: 过滤任务状态 (pending, downloading, analyzing, merging, completed, failed)
-        limit: 限制返回数量
-    
-    返回:
-    {
-        "name": "任务名称",
-        "tasks": [
-            {
-                "task_id": "uuid",
-                "name": "任务名称",
-                "status": "completed",
-                "progress": 100,
-                ...
-            }
-        ],
-        "total": 5
-    }
-    """
-    try:
-        # 获取查询参数
-        status_filter = request.args.get('status')
-        limit = request.args.get('limit', type=int)
-        
-        # 获取所有任务并过滤名称
-        tasks = [t for t in task_manager.tasks.values() if t.name == name]
-        
-        # 过滤状态
-        if status_filter:
-            try:
-                status_enum = TaskStatus(status_filter)
-                tasks = [t for t in tasks if t.status == status_enum]
-            except ValueError:
-                return jsonify({'error': f'无效的状态: {status_filter}'}), 400
-        
-        # 按创建时间倒序排序
-        tasks.sort(key=lambda t: t.created_at, reverse=True)
-        
-        # 限制数量
-        if limit and limit > 0:
-            tasks = tasks[:limit]
-        
-        # 转换为字典
-        task_list = [t.to_dict() for t in tasks]
-        
-        return jsonify({
-            'name': name,
-            'tasks': task_list,
-            'total': len(task_list)
-        })
-    
-    except Exception as e:
-        logging.error(f"搜索任务失败: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 
