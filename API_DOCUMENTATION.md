@@ -2,6 +2,10 @@
 
 ## 接口列表
 
+URL
+内网地址：http://10.152.49.26:15000/
+公网地址：http://42.194.241.55:15000/
+
 ### 1. 健康检查
 
 检查API服务是否正常运行。
@@ -43,6 +47,7 @@ Content-Type: application/json
 {
   "cos_path": "egg/057c3d16-8767-4094-a8f3-1436a1bf7a88/2025-10-24",
   "prompt": "请分析这些麻将游戏截图中的每个玩家的操作",
+  "name": "2025年10月测试局",
   "force_reanalyze": false
 }
 ```
@@ -51,6 +56,7 @@ Content-Type: application/json
 |------|------|------|--------|------|
 | cos_path | string | 是 | - | COS存储路径，包含游戏截图PNG文件 |
 | prompt | string | 是 | - | 分析提示词，用于指导AI分析方向 |
+| name | string | 否 | "" | 任务名称，用于标识和搜索任务 |
 | force_reanalyze | boolean | 否 | false | 是否强制重新分析已有JSON的图片。如果为true，即使已有JSON文件也会重新分析；如果为false，则跳过已有JSON的图片 |
 
 **功能说明**
@@ -69,6 +75,7 @@ Content-Type: application/json
   "task_id": "85b9949b-f8c4-4855-97fe-8a2bf6e9b644",
   "status": "pending",
   "message": "任务已创建",
+  "name": "2025年10月测试局",
   "force_reanalyze": false
 }
 ```
@@ -189,7 +196,7 @@ GET /analysis/{task_id}/result
 | status | string | 任务状态 |
 | result_file | string | 结果文件的完整路径 |
 | content | string | 分析结果的完整文本内容 |
-| analysis_data | string | 与结果文件一致的完整文本内容（为前端提供的独立字段） |
+| analysis_data | string | |
 | size | integer | 文件大小（字节） |
 | created_at | string | 任务创建时间 |
 | updated_at | string | 任务更新时间 |
@@ -209,15 +216,17 @@ GET /analysis/{task_id}/result
 **请求**
 
 ```http
-GET /tasks?status={status}&limit={limit}
+GET /tasks?status={status}&page={page}&page_size={page_size}
 ```
 
 **查询参数**
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| status | string | 否 | 过滤任务状态（pending/downloading/analyzing/merging/completed/failed） |
-| limit | integer | 否 | 限制返回数量 |
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| status | string | 否 | - | 过滤任务状态（pending/downloading/analyzing/merging/completed/failed） |
+| page | integer | 否 | 1 | 页码，从1开始 |
+| page_size | integer | 否 | 20 | 每页数量，最大100 |
+| limit | integer | 否 | - | 限制返回数量（已废弃，建议使用page和page_size） |
 
 **响应**
 
@@ -239,14 +248,43 @@ GET /tasks?status={status}&limit={limit}
       "cache_used": false
     }
   ],
-  "total": 1
+  "total": 100,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 5
 }
 ```
 
+**响应字段说明**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| tasks | array | 任务列表 |
+| total | integer | 总任务数 |
+| page | integer | 当前页码 |
+| page_size | integer | 每页数量 |
+| total_pages | integer | 总页数 |
+
 **状态码**
 - `200 OK`: 查询成功
-- `400 Bad Request`: 参数错误（如无效的status值）
+- `400 Bad Request`: 参数错误（如无效的status值、页码小于1、每页数量超过100等）
 - `500 Internal Server Error`: 服务器内部错误
+
+**使用示例**
+
+```http
+# 获取第一页（默认每页20条）
+GET /tasks
+
+# 获取第2页，每页10条
+GET /tasks?page=2&page_size=10
+
+# 过滤已完成的任务，第1页
+GET /tasks?status=completed&page=1&page_size=20
+
+# 使用旧的limit参数（向后兼容）
+GET /tasks?limit=50
+```
 
 ---
 
@@ -296,5 +334,85 @@ GET /cos/list?path={cos_path}
 **状态码**
 - `200 OK`: 查询成功
 - `500 Internal Server Error`: 服务器内部错误
+
+---
+
+### 7. 根据名称搜索任务
+
+根据任务名称搜索任务列表。
+
+**请求**
+
+```http
+GET /search/{name}?status={status}&limit={limit}
+```
+
+**路径参数**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| name | string | 任务名称 |
+
+**查询参数**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| status | string | 否 | 过滤任务状态（pending/downloading/analyzing/merging/completed/failed） |
+| limit | integer | 否 | 限制返回数量 |
+
+**响应**
+
+```json
+{
+  "name": "2025年10月测试局",
+  "tasks": [
+    {
+      "task_id": "85b9949b-f8c4-4855-97fe-8a2bf6e9b644",
+      "cos_path": "egg/057c3d16-8767-4094-a8f3-1436a1bf7a88/2025-10-24",
+      "prompt": "请分析这些麻将游戏截图",
+      "name": "2025年10月测试局",
+      "force_reanalyze": false,
+      "status": "completed",
+      "created_at": "2025-10-27T10:00:00.123456",
+      "updated_at": "2025-10-27T10:05:00.123456",
+      "progress": 100,
+      "message": "分析完成",
+      "error": null,
+      "result_file": "/path/to/result.txt",
+      "cache_used": false
+    }
+  ],
+  "total": 5
+}
+```
+
+**响应字段说明**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| name | string | 搜索的任务名称 |
+| tasks | array | 匹配的任务列表 |
+| total | integer | 匹配的任务总数 |
+
+**状态码**
+- `200 OK`: 查询成功
+- `400 Bad Request`: 参数错误（如无效的status值）
+- `500 Internal Server Error`: 服务器内部错误
+
+**使用示例**
+
+```http
+# 搜索名称为"2025年10月测试局"的所有任务
+GET /search/2025年10月测试局
+
+# 搜索名称为"测试"且状态为completed的任务
+GET /search/测试?status=completed
+
+# 搜索名称为"测试"的任务，最多返回10条
+GET /search/测试?limit=10
+
+# 搜索名称为"测试"且状态为completed的任务，最多返回5条
+GET /search/测试?status=completed&limit=5
+```
 
 ---

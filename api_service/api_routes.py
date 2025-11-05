@@ -43,6 +43,7 @@ def create_analysis():
     {
         "cos_path": "egg/uuid/2025-10-15",
         "prompt": "分析提示词",
+        "name": "任务名称",  // 可选，任务标识名称
         "force_reanalyze": false  // 可选，是否强制重新分析已有JSON的图片，默认false
     }
     
@@ -62,6 +63,7 @@ def create_analysis():
         
         cos_path = data.get('cos_path')
         prompt = data.get('prompt')
+        name = data.get('name', '')
         force_reanalyze = data.get('force_reanalyze', False)
         
         # 验证参数
@@ -72,7 +74,7 @@ def create_analysis():
             return jsonify({'error': 'prompt参数不能为空'}), 400
         
         # 创建任务
-        task_id = task_manager.create_task(cos_path, prompt, force_reanalyze)
+        task_id = task_manager.create_task(cos_path, prompt, force_reanalyze, name)
         
         # 启动任务处理
         task_processor.start_task(task_id)
@@ -81,6 +83,7 @@ def create_analysis():
             'task_id': task_id,
             'status': 'pending',
             'message': '任务已创建',
+            'name': name,
             'force_reanalyze': force_reanalyze
         }), 201
     
@@ -128,7 +131,9 @@ def list_tasks():
     
     查询参数:
         status: 过滤任务状态 (pending, downloading, analyzing, merging, completed, failed)
-        limit: 限制返回数量
+        page: 页码，从1开始 (默认: 1)
+        page_size: 每页数量 (默认: 20)
+        limit: 限制返回数量 (已废弃，建议使用page和page_size)
     
     返回:
     {
@@ -140,7 +145,99 @@ def list_tasks():
                 ...
             }
         ],
-        "total": 10
+        "total": 100,
+        "page": 1,
+        "page_size": 20,
+        "total_pages": 5
+    }
+    """
+    try:
+        # 获取查询参数
+        status_filter = request.args.get('status')
+        page = request.args.get('page', default=1, type=int)
+        page_size = request.args.get('page_size', default=20, type=int)
+        limit = request.args.get('limit', type=int)  # 向后兼容
+        
+        # 验证分页参数
+        if page < 1:
+            return jsonify({'error': '页码必须大于0'}), 400
+        if page_size < 1:
+            return jsonify({'error': '每页数量必须大于0'}), 400
+        if page_size > 100:
+            return jsonify({'error': '每页数量不能超过100'}), 400
+        
+        # 获取所有任务
+        tasks = list(task_manager.tasks.values())
+        
+        # 过滤状态
+        if status_filter:
+            try:
+                status_enum = TaskStatus(status_filter)
+                tasks = [t for t in tasks if t.status == status_enum]
+            except ValueError:
+                return jsonify({'error': f'无效的状态: {status_filter}'}), 400
+        
+        # 按创建时间倒序排序
+        tasks.sort(key=lambda t: t.created_at, reverse=True)
+        
+        # 计算总数
+        total = len(tasks)
+        
+        # 计算分页
+        if limit and limit > 0:
+            # 向后兼容limit参数
+            tasks = tasks[:limit]
+            total_pages = 1
+            page = 1
+            page_size = limit
+        else:
+            # 使用分页
+            total_pages = (total + page_size - 1) // page_size  # 向上取整
+            start_index = (page - 1) * page_size
+            end_index = start_index + page_size
+            tasks = tasks[start_index:end_index]
+        
+        # 转换为字典
+        task_list = [t.to_dict() for t in tasks]
+        
+        return jsonify({
+            'tasks': task_list,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages
+        })
+    
+    except Exception as e:
+        logging.error(f"列出任务失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/search/<name>', methods=['GET'])
+def search_tasks_by_name(name: str):
+    """
+    根据任务名称搜索任务
+    
+    参数:
+        name: 任务名称（路径参数）
+    
+    查询参数:
+        status: 过滤任务状态 (pending, downloading, analyzing, merging, completed, failed)
+        limit: 限制返回数量
+    
+    返回:
+    {
+        "name": "任务名称",
+        "tasks": [
+            {
+                "task_id": "uuid",
+                "name": "任务名称",
+                "status": "completed",
+                "progress": 100,
+                ...
+            }
+        ],
+        "total": 5
     }
     """
     try:
@@ -148,8 +245,8 @@ def list_tasks():
         status_filter = request.args.get('status')
         limit = request.args.get('limit', type=int)
         
-        # 获取所有任务
-        tasks = list(task_manager.tasks.values())
+        # 获取所有任务并过滤名称
+        tasks = [t for t in task_manager.tasks.values() if t.name == name]
         
         # 过滤状态
         if status_filter:
@@ -170,12 +267,13 @@ def list_tasks():
         task_list = [t.to_dict() for t in tasks]
         
         return jsonify({
+            'name': name,
             'tasks': task_list,
             'total': len(task_list)
         })
     
     except Exception as e:
-        logging.error(f"列出任务失败: {e}", exc_info=True)
+        logging.error(f"搜索任务失败: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 
