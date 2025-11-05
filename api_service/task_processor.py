@@ -103,7 +103,8 @@ class TaskProcessor:
             
             analyzer = GeminiAnalyzer()
             normalized_cos_path = cos_path.strip('/') if cos_path else ''
-            cos_result_prefix = f"{normalized_cos_path}/analysis" if normalized_cos_path else "analysis"
+            # cos_result_prefix = f"{normalized_cos_path}/analysis" if normalized_cos_path else "analysis"
+            cos_result_prefix = normalized_cos_path
             
             def analyze_progress(current, total, msg):
                 progress = 40 + int(40 * current / total)
