@@ -496,30 +496,33 @@ class GeminiAnalyzer:
                 # 如果JSON已存在且不强制重新分析，则跳过
                 if os.path.exists(json_path) and not force_reanalyze:
                     self.logger.info(f"JSON文件已存在，跳过分析 ({i}/{total}): {json_path}")
-                    # 在跳过时，尽量补写图片COS路径并上传至COS（如果需要）
+                    # 跳过时确保JSON已上传至COS，并补充图片COS路径（如果缺失）
                     if cos_result_prefix:
                         try:
                             with open(json_path, 'r+', encoding='utf-8') as f:
                                 data = json.load(f)
-                                if '图片COS路径' not in data:
-                                    image_remote_key = self._build_remote_key(
+                                
+                                # 补充图片COS路径（如果缺失或为null）
+                                if not data.get('图片COS路径'):
+                                    image_cos_key = self._build_remote_key(
                                         cos_result_prefix,
                                         os.path.basename(image_path)
                                     )
-                                    # 尝试上传图片至COS
-                                    self._upload_to_cos(image_path, image_remote_key)
-                                    data['图片COS路径'] = image_remote_key
+                                    data['图片COS路径'] = image_cos_key
+                                    # 更新本地JSON文件
                                     f.seek(0)
                                     json.dump(data, f, ensure_ascii=False, indent=2)
                                     f.truncate()
-                                    # 同步更新COS上的JSON
-                                    remote_key = self._build_remote_key(
-                                        cos_result_prefix,
-                                        os.path.basename(json_path)
-                                    )
-                                    self._upload_analysis_json(data, remote_key)
+                                
+                                # 同步上传JSON到COS
+                                remote_key = self._build_remote_key(
+                                    cos_result_prefix,
+                                    os.path.basename(json_path)
+                                )
+                                self._upload_analysis_json(data, remote_key)
                         except Exception as exc:
-                            self.logger.warning(f"补写图片COS路径失败: {exc}")
+                            self.logger.warning(f"处理已存在JSON失败: {exc}")
+                            self.logger.warning(f"上传JSON至COS失败: {exc}")
                     json_files.append(json_path)
                     if progress_callback:
                         progress_callback(i, total, f"跳过已分析: {os.path.basename(image_path)}")
@@ -529,16 +532,14 @@ class GeminiAnalyzer:
                 self.logger.info(f"开始分析图片 {i}/{total}: {image_path}")
                 result = self.analyze_image(image_path, prompt)
 
-                # 生成并上传图片到COS（可选），并在结果中记录路径
-                image_remote_key = None
+                # 构建图片的COS路径：使用图片文件名
+                image_cos_key = None
                 if cos_result_prefix:
-                    image_remote_key = self._build_remote_key(
+                    image_cos_key = self._build_remote_key(
                         cos_result_prefix,
                         os.path.basename(image_path)
                     )
-                    self._upload_to_cos(image_path, image_remote_key)
-                # 将图片COS路径写入分析结果
-                result['图片COS路径'] = image_remote_key
+                result['图片COS路径'] = image_cos_key
                 
                 # 保存JSON结果
                 with open(json_path, 'w', encoding='utf-8') as f:
